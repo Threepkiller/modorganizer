@@ -413,7 +413,7 @@ p, li { white-space: pre-wrap; }
                <enum>QAbstractItemView::SelectRows</enum>
               </property>
               <property name="indentation">
-               <number>20</number>
+               <number>0</number>
               </property>
               <property name="itemsExpandable">
                <bool>true</bool>
