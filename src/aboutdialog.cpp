@@ -44,6 +44,7 @@ AboutDialog::AboutDialog(const QString &version, QWidget *parent)
   m_LicenseFiles[LICENSE_CCBY3] = "by-sa3.txt";
   m_LicenseFiles[LICENSE_ZLIB] = "zlib.txt";
   m_LicenseFiles[LICENSE_APACHE2] = "apache-license-2.0.txt";
+  m_LicenseFiles[LICENSE_CCBYNCSA4] = "cc-by-nc-sa-4.0.txt";
 
   addLicense("Qt", LICENSE_LGPL3);
   addLicense("Qt Json", LICENSE_GPL3);
@@ -55,6 +56,7 @@ AboutDialog::AboutDialog(const QString &version, QWidget *parent)
   addLicense("Icons by Lorc, Delapouite and sbed available on http://game-icons.net", LICENSE_CCBY3);
   addLicense("Castle Core", LICENSE_APACHE2);
   addLicense("LOOT", LICENSE_GPL3);
+  addLicense("VS15 Theme", LICENSE_CCBYNCSA4);
 
   ui->nameLabel->setText(QString("<span style=\"font-size:12pt; font-weight:600;\">%1 %2</span>").arg(ui->nameLabel->text()).arg(version));
 #if defined(HGID)
