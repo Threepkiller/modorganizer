@@ -63,7 +63,7 @@ QAbstractItemView {
   alternate-background-color: #262626;
   border-color: #3F3F46; }
   QAbstractItemView::item:selected, QAbstractItemView::item:selected:hover {
-    background-color: #3399FF;
+    background-color: #007ACC;
     color: #F1F1F1; }
 
 QAbstractItemView,
