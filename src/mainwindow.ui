@@ -799,7 +799,7 @@ p, li { white-space: pre-wrap; }
                  </layout>
                 </item>
                 <item>
-                 <widget class="QTreeView" name="espList">
+                 <widget class="PluginListView" name="espList">
                   <property name="minimumSize">
                    <size>
                     <width>250</width>
@@ -1419,6 +1419,11 @@ Right now this has very limited functionality</string>
    <class>ModListView</class>
    <extends>QTreeView</extends>
    <header>modlistview.h</header>
+  </customwidget>
+  <customwidget>
+   <class>PluginListView</class>
+   <extends>QTreeView</extends>
+   <header>pluginlistview.h</header>
   </customwidget>
  </customwidgets>
  <resources>

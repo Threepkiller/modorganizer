@@ -145,6 +145,7 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include <QVariantList>
 #include <QWhatsThis>
 #include <QWidgetAction>
+#include <QWebEngineProfile>
 
 #include <QDebug>
 #include <QtGlobal>
@@ -199,6 +200,10 @@ MainWindow::MainWindow(QSettings &initSettings
   , m_PluginContainer(pluginContainer)
   , m_DidUpdateMasterList(false)
 {
+  QWebEngineProfile::defaultProfile()->setPersistentCookiesPolicy(QWebEngineProfile::NoPersistentCookies);
+  QWebEngineProfile::defaultProfile()->setHttpCacheMaximumSize(52428800);
+  QWebEngineProfile::defaultProfile()->setCachePath(m_OrganizerCore.settings().getCacheDirectory());
+  QWebEngineProfile::defaultProfile()->setPersistentStoragePath(m_OrganizerCore.settings().getCacheDirectory());
   ui->setupUi(this);
   updateWindowTitle(QString(), false);
 
@@ -351,6 +356,9 @@ MainWindow::MainWindow(QSettings &initSettings
   connect(&m_IntegratedBrowser, SIGNAL(requestDownload(QUrl,QNetworkReply*)), &m_OrganizerCore, SLOT(requestDownload(QUrl,QNetworkReply*)));
 
   connect(this, SIGNAL(styleChanged(QString)), this, SLOT(updateStyle(QString)));
+
+  connect(ui->espList->selectionModel(), SIGNAL(selectionChanged(QItemSelection, QItemSelection)), this, SLOT(esplistSelectionsChanged(QItemSelection)));
+  connect(ui->modList->selectionModel(), SIGNAL(selectionChanged(QItemSelection, QItemSelection)), this, SLOT(modlistSelectionsChanged(QItemSelection)));
 
   m_UpdateProblemsTimer.setSingleShot(true);
   connect(&m_UpdateProblemsTimer, SIGNAL(timeout()), this, SLOT(updateProblemsButton()));
@@ -868,6 +876,7 @@ void MainWindow::cleanup()
     ui->logList->setModel(nullptr);
   }
 
+  QWebEngineProfile::defaultProfile()->clearAllVisitedLinks();
   m_IntegratedBrowser.close();
 }
 
@@ -1456,17 +1465,18 @@ void MainWindow::storeSettings(QSettings &settings) {
   }
 }
 
-void MainWindow::lock()
+ILockedWaitingForProcess* MainWindow::lock()
 {
   if (m_LockDialog != nullptr) {
     ++m_LockCount;
-    return;
+    return m_LockDialog;
   }
   m_LockDialog = new LockedDialog(qApp->activeWindow());
   m_LockDialog->show();
   setEnabled(false);
   m_LockDialog->setEnabled(true); //What's the point otherwise?
   ++m_LockCount;
+  return m_LockDialog;
 }
 
 void MainWindow::unlock()
@@ -1482,22 +1492,6 @@ void MainWindow::unlock()
     m_LockDialog->deleteLater();
     m_LockDialog = nullptr;
     setEnabled(true);
-  }
-}
-
-bool MainWindow::unlockClicked()
-{
-  if (m_LockDialog != nullptr) {
-    return m_LockDialog->unlockClicked();
-  } else {
-    return false;
-  }
-}
-
-void MainWindow::setProcessName(QString const &name)
-{
-  if (m_LockDialog != nullptr) {
-    m_LockDialog->setProcessName(name);
   }
 }
 
@@ -2112,6 +2106,18 @@ void MainWindow::modlistSelectionChanged(const QModelIndex &current, const QMode
       && !m_ModListSortProxy->beingInvalidated()) {
     m_ModListSortProxy->invalidate();
   }*/
+  ui->modList->verticalScrollBar()->repaint();
+}
+
+void MainWindow::modlistSelectionsChanged(const QItemSelection &selected)
+{
+  m_OrganizerCore.pluginList()->highlightPlugins(selected, *m_OrganizerCore.directoryStructure(), *m_OrganizerCore.currentProfile());
+  ui->espList->verticalScrollBar()->repaint();
+}
+
+void MainWindow::esplistSelectionsChanged(const QItemSelection &selected)
+{
+  m_OrganizerCore.modList()->highlightMods(selected, *m_OrganizerCore.directoryStructure());
   ui->modList->verticalScrollBar()->repaint();
 }
 
@@ -3193,11 +3199,10 @@ void MainWindow::addWindowsLink(const ShortcutType mapping)
     QString executable = QDir::toNativeSeparators(selectedExecutable.m_BinaryInfo.absoluteFilePath());
 
     std::wstring targetFile       = ToWString(exeInfo.absoluteFilePath());
-    std::wstring parameter        = ToWString(QString("\"%1\" %2").arg(executable)
-                                                                  .arg(selectedExecutable.m_Arguments));
-    std::wstring description      = ToWString(selectedExecutable.m_BinaryInfo.fileName());
+    std::wstring parameter        = ToWString(QString("\"moshortcut://%1\"").arg(selectedExecutable.m_Title));
+    std::wstring description      = ToWString(QString("Run %1 with ModOrganizer").arg(selectedExecutable.m_Title));
     std::wstring iconFile         = ToWString(executable);
-    std::wstring currentDirectory = ToWString(QDir::toNativeSeparators(exeInfo.absolutePath()));
+    std::wstring currentDirectory = ToWString(QDir::toNativeSeparators(qApp->applicationDirPath()));
 
     if (CreateShortcut(targetFile.c_str()
                        , parameter.c_str()
@@ -3275,7 +3280,8 @@ void MainWindow::on_actionSettings_triggered()
 
   updateDownloadListDelegate();
 
-  m_OrganizerCore.setLogLevel(settings.logLevel());
+  m_OrganizerCore.updateVFSParams(settings.logLevel(), settings.crashDumpsType());
+  m_OrganizerCore.cycleDiagnostics();
 }
 
 
@@ -4252,7 +4258,7 @@ void MainWindow::on_bossButton_clicked()
     parameters << "--game" << m_OrganizerCore.managedGame()->gameShortName()
                << "--gamePath" << QString("\"%1\"").arg(m_OrganizerCore.managedGame()->gameDirectory().absolutePath())
                << "--pluginListPath" << QString("\"%1/loadorder.txt\"").arg(m_OrganizerCore.profilePath())
-               << "--out" << outPath;
+               << "--out" << QString("\"%1\"").arg(outPath);
 
     if (m_DidUpdateMasterList) {
       parameters << "--skipUpdateMasterlist";

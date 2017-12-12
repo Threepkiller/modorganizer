@@ -116,10 +116,8 @@ public:
   void storeSettings(QSettings &settings) override;
   void readSettings();
 
-  virtual void lock() override;
+  virtual ILockedWaitingForProcess* lock() override;
   virtual void unlock() override;
-  virtual bool unlockClicked() override;
-  virtual void setProcessName(QString const &name) override;
 
   bool addProfile();
   void refreshDataTree();
@@ -519,6 +517,9 @@ private slots:
 
   void modlistSelectionChanged(const QModelIndex &current, const QModelIndex &previous);
   void modListSortIndicatorChanged(int column, Qt::SortOrder order);
+
+  void modlistSelectionsChanged(const QItemSelection &current);
+  void esplistSelectionsChanged(const QItemSelection &current);
 
 private slots: // ui slots
   // actions
