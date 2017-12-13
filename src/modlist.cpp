@@ -339,7 +339,8 @@ QVariant ModList::data(const QModelIndex &modelIndex, int role) const
       int highlight = modInfo->getHighlight();
       if (highlight & ModInfo::HIGHLIGHT_IMPORTANT)    return QBrush(Qt::darkRed);
       else if (highlight & ModInfo::HIGHLIGHT_INVALID) return QBrush(Qt::darkGray);
-      else if (highlight & ModInfo::HIGHLIGHT_PLUGIN)  return QBrush(Qt::darkBlue);
+	  // makes mod names hard to read on dark style sheets
+      // else if (highlight & ModInfo::HIGHLIGHT_PLUGIN)  return QBrush(Qt::darkBlue);
     } else if (column == COL_VERSION) {
       if (!modInfo->getNewestVersion().isValid()) {
         return QVariant();
