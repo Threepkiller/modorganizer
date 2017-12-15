@@ -21,12 +21,13 @@ QWidget {
   QWidget::disabled {
     color: #656565; }
 
-/* Common */
-/* FIX: For some reason applying background-color or border fixes paddings properties */
+/* Commented out because it breaks the plugin highlight feature */
+/* Common*/
+/* FIX: For some reason applying background-color or border fixes paddings properties 
 QListView::item,
 QTreeView#espList::item,
 QTreeWidget#categoriesList::item {
-  border-width: 0; }
+  border-width: 0; }*/
 
 /* remove outline */
 * {
