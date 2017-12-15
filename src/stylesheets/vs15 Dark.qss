@@ -405,13 +405,13 @@ QScrollBar::sub-line:horizontal {
 
 /* Vertical */
 QScrollBar:vertical {
-  width: 20px;
+  width: 18px;
   border: none;
   margin: 23px 0 23px 0; }
 
 QScrollBar::handle:vertical {
   min-height: 32px;
-  margin: 2px 4px; }
+  margin: 2px 3px; }
 
 QScrollBar::add-line:vertical {
   height: 23px;
