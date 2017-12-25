@@ -64,7 +64,7 @@ ModList::ModList(QObject *parent)
   m_ContentIcons[ModInfo::CONTENT_PLUGIN]    = std::make_tuple(":/MO/gui/content/plugin", tr("Game Plugins (ESP/ESM/ESL)"));
   m_ContentIcons[ModInfo::CONTENT_INTERFACE] = std::make_tuple(":/MO/gui/content/interface", tr("Interface"));
   m_ContentIcons[ModInfo::CONTENT_MESH]      = std::make_tuple(":/MO/gui/content/mesh", tr("Meshes"));
-  m_ContentIcons[ModInfo::CONTENT_BSA]       = std::make_tuple(":/MO/gui/content/bsa", tr("BSA"));
+  m_ContentIcons[ModInfo::CONTENT_BSA]       = std::make_tuple(":/MO/gui/content/bsa", tr("Bethesda Archive"));
   m_ContentIcons[ModInfo::CONTENT_SCRIPT]    = std::make_tuple(":/MO/gui/content/script", tr("Scripts (Papyrus)"));
   m_ContentIcons[ModInfo::CONTENT_SKSE]      = std::make_tuple(":/MO/gui/content/skse", tr("Script Extender Plugin"));
   m_ContentIcons[ModInfo::CONTENT_SKYPROC]   = std::make_tuple(":/MO/gui/content/skyproc", tr("SkyProc Patcher"));
@@ -425,13 +425,13 @@ bool ModList::renameMod(int index, const QString &newName)
     return false;
   }
 
-  // before we rename, write back the current profile so we don't lose changes and to ensure
-  // there is no scheduled asynchronous rewrite anytime soon
-  m_Profile->writeModlistNow();
-
   ModInfo::Ptr modInfo = ModInfo::getByIndex(index);
   QString oldName = modInfo->name();
-  if (modInfo->setName(nameFixed)) {
+  if (newName != oldName && modInfo->setName(nameFixed)) {
+    // before we rename, write back the current profile so we don't lose changes and to ensure
+    // there is no scheduled asynchronous rewrite anytime soon
+    m_Profile->writeModlistNow();
+
     // this just disabled the mod in all profiles. The recipient of modRenamed must fix that
     emit modRenamed(oldName, nameFixed);
   }
@@ -702,14 +702,13 @@ void ModList::highlightMods(const QItemSelection &selected, const MOShared::Dire
     if (fileEntry.get() != nullptr) {
       QString fileName;
       bool archive = false;
-      std::vector<int> origins;
+      std::vector<std::pair<int, std::wstring>> origins;
       {
-        std::vector<int> alternatives = fileEntry->getAlternatives();
-        origins.push_back(fileEntry->getOrigin(archive));
-        origins.insert(origins.end(), alternatives.begin(), alternatives.end());
+        std::vector<std::pair<int, std::wstring>> alternatives = fileEntry->getAlternatives();
+        origins.insert(origins.end(), std::pair<int, std::wstring>(fileEntry->getOrigin(archive), fileEntry->getArchive()));
       }
-      for (int originId : origins) {
-        MOShared::FilesOrigin &origin = directoryEntry.getOriginByID(originId);
+      for (auto originInfo : origins) {
+        MOShared::FilesOrigin &origin = directoryEntry.getOriginByID(originInfo.first);
         for (unsigned int i = 0; i < ModInfo::getNumMods(); ++i) {
           if (ModInfo::getByIndex(i)->internalName() == QString::fromStdWString(origin.getName())) {
             ModInfo::getByIndex(i)->setPluginSelected(true);
@@ -942,12 +941,12 @@ void ModList::removeRowForce(int row, const QModelIndex &parent)
 
   m_Profile->setModEnabled(row, false);
 
-  m_Profile->modlistWriter().cancel();
+  m_Profile->cancelModlistWrite();
   beginRemoveRows(parent, row, row);
   ModInfo::removeMod(row);
   endRemoveRows();
   m_Profile->refreshModStatus();  // removes the mod from the status list
-  m_Profile->modlistWriter().write(); // this ensures the modified list gets written back before new mods can be installed
+  m_Profile->writeModlist(); // this ensures the modified list gets written back before new mods can be installed
 
   if (wasEnabled) {
     emit removeOrigin(modInfo->name());

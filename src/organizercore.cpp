@@ -32,6 +32,7 @@
 #include <report.h>
 #include <questionboxmemory.h>
 #include "lockeddialog.h"
+#include "instancemanager.h"
 
 #include <QApplication>
 #include <QCoreApplication>
@@ -578,8 +579,8 @@ void OrganizerCore::downloadRequestedNXM(const QString &url)
 
 void OrganizerCore::externalMessage(const QString &message)
 {
-  if (isMoShortcut(message)) {
-    runShortcut(moShortcutName(message));
+  if (MOShortcut moshortcut{ message }) {
+    runShortcut(moshortcut);
   }
   else if (isNxmLink(message)) {
     MessageDialog::showMessage(tr("Download started"), qApp->activeWindow());
@@ -1002,9 +1003,9 @@ QStringList OrganizerCore::getFileOrigins(const QString &fileName) const
   if (file.get() != nullptr) {
     result.append(ToQString(
         m_DirectoryStructure->getOriginByID(file->getOrigin()).getName()));
-    foreach (int i, file->getAlternatives()) {
+    foreach (auto i, file->getAlternatives()) {
       result.append(
-          ToQString(m_DirectoryStructure->getOriginByID(i).getName()));
+          ToQString(m_DirectoryStructure->getOriginByID(i.first).getName()));
     }
   } else {
     qDebug("%s not found", qPrintable(fileName));
@@ -1030,9 +1031,9 @@ QList<MOBase::IOrganizer::FileInfo> OrganizerCore::findFileInfos(
           m_DirectoryStructure->getOriginByID(file->getOrigin(fromArchive))
               .getName()));
       info.archive = fromArchive ? ToQString(file->getArchive()) : "";
-      foreach (int idx, file->getAlternatives()) {
+      foreach (auto idx, file->getAlternatives()) {
         info.origins.append(
-            ToQString(m_DirectoryStructure->getOriginByID(idx).getName()));
+            ToQString(m_DirectoryStructure->getOriginByID(idx.first).getName()));
       }
 
       if (filter(info)) {
@@ -1181,7 +1182,7 @@ HANDLE OrganizerCore::spawnBinaryProcess(const QFileInfo &binary,
 
   // need to make sure all data is saved before we start the application
   if (m_CurrentProfile != nullptr) {
-    m_CurrentProfile->modlistWriter().writeImmediately(true);
+    m_CurrentProfile->writeModlistNow(true);
   }
 
   // TODO: should also pass arguments
@@ -1228,9 +1229,15 @@ HANDLE OrganizerCore::spawnBinaryProcess(const QFileInfo &binary,
   }
 }
 
-HANDLE OrganizerCore::runShortcut(const QString &title)
+HANDLE OrganizerCore::runShortcut(const MOShortcut& shortcut)
 {
-  Executable& exe = m_ExecutablesList.find(title);
+  if (shortcut.hasInstance() && shortcut.instance() != InstanceManager::instance().currentInstance())
+    throw std::runtime_error(
+      QString("Refusing to run executable from different instance %1:%2")
+      .arg(shortcut.instance(),shortcut.executable())
+      .toLocal8Bit().constData());
+
+  Executable& exe = m_ExecutablesList.find(shortcut.executable());
 
   return spawnBinaryDirect(
     exe.m_BinaryInfo, exe.m_Arguments,
@@ -1438,7 +1445,7 @@ void OrganizerCore::refreshModList(bool saveChanges)
 {
   // don't lose changes!
   if (saveChanges) {
-    m_CurrentProfile->modlistWriter().writeImmediately(true);
+    m_CurrentProfile->writeModlistNow(true);
   }
   ModInfo::updateFromDisc(m_Settings.getModDirectory(), &m_DirectoryStructure,
                           m_Settings.displayForeign(), managedGame());
@@ -1460,7 +1467,7 @@ void OrganizerCore::refreshESPList()
     });
     return;
   }
-  m_CurrentProfile->modlistWriter().write();
+  m_CurrentProfile->writeModlist();
 
   // clear list
   try {
@@ -1493,6 +1500,10 @@ void OrganizerCore::refreshBSAList()
     m_ActiveArchives = toStringList(iter.begin(), iter.end());
     if (m_ActiveArchives.isEmpty()) {
       m_ActiveArchives = m_DefaultArchives;
+    }
+    
+    if (m_UserInterface != nullptr) {
+      m_UserInterface->updateBSAList(m_DefaultArchives, m_ActiveArchives);
     }
 
     m_ArchivesInit = true;
@@ -1572,6 +1583,9 @@ void OrganizerCore::updateModInDirectoryStructure(unsigned int index,
   // now we need to refresh the bsa list and save it so there is no confusion
   // about what archives are avaiable and active
   refreshBSAList();
+  if (m_UserInterface != nullptr) {
+    m_UserInterface->archivesWriter().writeImmediately(false);
+  }
 
   std::vector<QString> archives = enabledArchives();
   m_DirectoryRefresher.setMods(
@@ -1663,7 +1677,7 @@ std::vector<QString> OrganizerCore::enabledArchives()
 void OrganizerCore::refreshDirectoryStructure()
 {
   if (!m_DirectoryUpdate) {
-    m_CurrentProfile->modlistWriter().writeImmediately(true);
+    m_CurrentProfile->writeModlistNow(true);
 
     m_DirectoryUpdate = true;
     std::vector<std::tuple<QString, QString, int>> activeModList
@@ -1728,6 +1742,9 @@ void OrganizerCore::modStatusChanged(unsigned int index)
         FilesOrigin &origin
             = m_DirectoryStructure->getOriginByName(ToWString(modInfo->name()));
         origin.enable(false);
+      }
+      if (m_UserInterface != nullptr) {
+        m_UserInterface->archivesWriter().write();
       }
     }
     modInfo->clearCaches();
@@ -1885,6 +1902,9 @@ bool OrganizerCore::saveCurrentLists()
 
   try {
     savePluginList();
+    if (m_UserInterface != nullptr) {
+      m_UserInterface->archivesWriter().write();
+    }
   } catch (const std::exception &e) {
     reportError(tr("failed to save load order: %1").arg(e.what()));
   }
@@ -1912,7 +1932,7 @@ void OrganizerCore::prepareStart()
   if (m_CurrentProfile == nullptr) {
     return;
   }
-  m_CurrentProfile->modlistWriter().write();
+  m_CurrentProfile->writeModlist();
   m_CurrentProfile->createTweakedIniFile();
   saveCurrentLists();
   m_Settings.setupLoadMechanism();
