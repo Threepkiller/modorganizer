@@ -122,6 +122,7 @@ public:
   bool addProfile();
   void updateBSAList(const QStringList &defaultArchives, const QStringList &activeArchives);
   void refreshDataTree();
+  void refreshDataTreeKeepExpandedNodes();
   void refreshSaveList();
 
   void setModListSorting(int index);
@@ -275,6 +276,8 @@ private:
   QString queryRestore(const QString &filePath);
 
   QMenu *modListContextMenu();
+
+  QMenu *openFolderMenu();
 
   std::set<QString> enabledArchives();
 
@@ -483,7 +486,12 @@ private slots:
   void enableVisibleMods();
   void disableVisibleMods();
   void exportModListCSV();
-
+  void openInstanceFolder();
+  void openInstallFolder();
+  void openDownloadsFolder();
+  void openProfileFolder();
+  void openGameFolder();
+  void openMyGamesFolder();
   void startExeAction();
 
   void checkBSAList();
@@ -544,6 +552,7 @@ private slots: // ui slots
   void on_actionUpdate_triggered();
   void on_actionEndorseMO_triggered();
 
+  void on_clearFiltersButton_clicked();
   void on_btnRefreshData_clicked();
   void on_categoriesList_customContextMenuRequested(const QPoint &pos);
   void on_conflictsCheckBox_toggled(bool checked);
