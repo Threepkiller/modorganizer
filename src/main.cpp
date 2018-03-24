@@ -402,6 +402,8 @@ void setupPath()
   qDebug("MO at: %s", qPrintable(QDir::toNativeSeparators(
                           QCoreApplication::applicationDirPath())));
 
+  QCoreApplication::setLibraryPaths(QStringList(QCoreApplication::applicationDirPath() + "/dlls") + QCoreApplication::libraryPaths());
+
   boost::scoped_array<TCHAR> oldPath(new TCHAR[BUFSIZE]);
   DWORD offset = ::GetEnvironmentVariable(TEXT("PATH"), oldPath.get(), BUFSIZE);
   if (offset > BUFSIZE) {
@@ -409,20 +411,66 @@ void setupPath()
     ::GetEnvironmentVariable(TEXT("PATH"), oldPath.get(), offset);
   }
 
-  std::wstring newPath(oldPath.get());
+  std::wstring newPath(ToWString(QDir::toNativeSeparators(
+    QCoreApplication::applicationDirPath())) + L"\\dlls");
   newPath += L";";
-  newPath += ToWString(QDir::toNativeSeparators(
-                           QCoreApplication::applicationDirPath()))
-                 .c_str();
-  newPath += L"\\dlls";
+  newPath += oldPath.get();
 
   ::SetEnvironmentVariableW(L"PATH", newPath.c_str());
+}
+
+static void preloadSsl()
+{
+  QString appPath = QDir::toNativeSeparators(QCoreApplication::applicationDirPath());
+  if (GetModuleHandleA("libeay32.dll"))
+    qWarning("libeay32.dll already loaded?!");
+  else {
+    QString libeay32 = appPath + "\\libeay32.dll";
+    if (!QFile::exists(libeay32))
+      qWarning("libeay32.dll not found: %s", qPrintable(libeay32));
+    else if (!LoadLibraryW(libeay32.toStdWString().c_str()))
+      qWarning("failed to load: %s, %d", qPrintable(libeay32), GetLastError());
+  }
+  if (GetModuleHandleA("ssleay32.dll"))
+    qWarning("ssleay32.dll already loaded?!");
+  else {
+    QString ssleay32 = appPath + "\\ssleay32.dll";
+    if (!QFile::exists(ssleay32))
+      qWarning("ssleay32.dll not found: %s", qPrintable(ssleay32));
+    else if (!LoadLibraryW(ssleay32.toStdWString().c_str()))
+      qWarning("failed to load: %s, %d", qPrintable(ssleay32), GetLastError());
+  }
+}
+
+static QString getVersionDisplayString()
+{
+  VS_FIXEDFILEINFO version = GetFileVersion(ToWString(QApplication::applicationFilePath()));
+  return VersionInfo(version.dwFileVersionMS >> 16,
+    version.dwFileVersionMS & 0xFFFF,
+    version.dwFileVersionLS >> 16,
+    version.dwFileVersionLS & 0xFFFF).displayString();
 }
 
 int runApplication(MOApplication &application, SingleInstance &instance,
                    const QString &splashPath)
 {
-  qDebug("start main application");
+
+  qDebug("Starting Mod Organizer version %s revision %s", qPrintable(getVersionDisplayString()),
+#if defined(HGID)
+    HGID
+#elif defined(GITID)
+    GITID
+#else
+    "unknown"
+#endif
+  );
+
+#if !defined(QT_NO_SSL)
+  preloadSsl();
+  qDebug("ssl support: %d", QSslSocket::supportsSsl());
+#else
+  qDebug("non-ssl build");
+#endif
 
   QString dataPath = application.property("dataPath").toString();
   qDebug("data path: %s", qPrintable(dataPath));
@@ -588,6 +636,9 @@ int runApplication(MOApplication &application, SingleInstance &instance,
 
 int main(int argc, char *argv[])
 {
+  //Should allow for better scaling of ui with higher resolution displays
+  QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+
   if (argc >= 4) {
     std::vector<std::wstring> arg;
     auto args = UntouchedCommandLineArguments(2, arg);
@@ -599,12 +650,6 @@ int main(int argc, char *argv[])
   QStringList arguments = application.arguments();
 
   setupPath();
-
-  #if !defined(QT_NO_SSL)
-      qDebug("ssl support: %d", QSslSocket::supportsSsl());
-  #else
-      qDebug("non-ssl build");
-  #endif
 
   bool forcePrimary = false;
   if (arguments.contains("update")) {
